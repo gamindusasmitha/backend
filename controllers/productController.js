@@ -29,18 +29,18 @@ export function createProduct(req, res) {
 export async function getAllProducts(req, res) {
 	try {
 		if (isAdmin(req)) {
-			// Product.find()
-			// 	.then((products) => {
-			// 		res.json(products);
-			// 	})
-			// 	.catch((error) => {
-			// 		res.status(500).json({
-			// 			message: "Error fetching products",
-			// 			error: error.message,
-			// 		});
-			// 	});
+			 Product.find()
+			 	.then((products) => {
+			 		res.json(products);
+			 	})
+			 	.catch((error) => {
+			 		res.status(500).json({
+			 			message: "Error fetching products",
+			 			error: error.message,
+			 		});
+			 	});
 
-			// Using async-await
+			
 
 			const products = await Product.find();
 		} else {
