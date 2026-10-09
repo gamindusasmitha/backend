@@ -63,7 +63,7 @@ export async function getAllProducts(req, res) {
 	}
 }
 
-export function deleteProduct(req, res) {
+export async function deleteProduct(req, res) {
 	if (!isAdmin(req)) {
 		res.status(403).json({
 			message: "Only admin can delete products",
@@ -71,13 +71,28 @@ export function deleteProduct(req, res) {
 		return;
 	}
 
-	const productID = req.params.productID;
+	try {
+		const productID = req.params.productID;
 
-	Product.deleteOne({ productID: productID }).then(() => {
+		const result = await Product.deleteOne({ productID: productID });
+			console.log("Delete result:", result);
+
+		if (result.deletedCount === 0) {
+			res.status(404).json({
+				message: "Product not found: " + productID,
+			});
+			return;
+		}
+
 		res.json({
 			message: "Product deleted successfully",
 		});
-	});
+	} catch (error) {
+		console.log(error);
+		res.status(500).json({
+			message: "Failed to delete product",
+		});
+	}
 }
 
 export function updateProduct(req, res) {
