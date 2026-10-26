@@ -13,6 +13,7 @@ productRouter.get("/trending", (req,res)=>{
 
 productRouter.post("/", createProduct)
 
+
 productRouter.get("/:productID", getProductByID)
 
 productRouter.delete("/:productID", deleteProduct)

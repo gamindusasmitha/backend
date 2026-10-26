@@ -143,3 +143,25 @@ export function getProductByID(req, res) {
 		});
 }
 // add try catch for async-await
+
+
+export async function searchProducts(req,res) {
+	const query = req.params.query
+
+	try {
+
+		const products = await Product.find(
+			{
+				name : { $regex : query , $options : "i" },
+				isAvailable : true
+
+			}
+		)
+
+	}catch(error){
+		res.status(500).json({
+			message : "Error searching products",
+			error : error.message
+		})
+	}
+}
