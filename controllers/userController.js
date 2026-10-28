@@ -285,21 +285,24 @@ export async function sendOTP(req, res) {
 }
 
 
-export async function getAllUsers(req,res) {
-	
-	if (!isAdmin(req)){
-		res.status(401).json({
-			message : "Unauthorized"
-		})
-	}return
 
-	try {
-		const users = await User.find()
-		res.json(users)
-	}catch(error){
-		res.status(500).json({
-			message : "Error fetching users",
-			error : error.message
-		})
-	}
+export async function getAllUsers(req, res) {
+    if (!isAdmin(req)) {
+        return res.status(403).json({
+            message: "Unauthorized. Admin access required."
+        });
+    }
+
+    try {
+        const users = await User.find();
+
+        return res.status(200).json(users);
+    } catch (error) {
+        console.error("Error fetching users:", error);
+
+        return res.status(500).json({
+            message: "Error fetching users",
+            error: error.message
+        });
+    }
 }

@@ -21,7 +21,7 @@ const orderSchema = new mongoose.Schema(
             required : true,
         },
         date :{
-             type : date,
+             type : Date,
             required : true,
             default : Date.now
         },
@@ -44,7 +44,7 @@ const orderSchema = new mongoose.Schema(
                     type : String,
                     required : true
                 },
-                anme : {
+                name : {
                     type : String,
                     required : true
                 },

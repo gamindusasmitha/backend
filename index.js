@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import jwt from "jsonwebtoken"
 import userRouter from "./routes/userRouter.js";
 import productRouter from "./routes/productRouter.js";
+import orderRouter from "./routes/orderRouter.js"
 import cors from "cors";
 import dotenv from "dotenv"
 
@@ -10,11 +11,12 @@ dotenv.config()
 
 const mongoURI = process.env.MONGO_URL
 
-mongoose.connect(mongoURI).then(
-    ()=>{
-        console.log("Connected to MongoDB Cluster")
-    }
-)
+mongoose
+  .connect(process.env.MONGO_URL, { serverSelectionTimeoutMS: 10000 })
+  .then(() => console.log("Connected to the database"))
+  .catch((error) => {
+    console.log("Database connection failed:", error.message);
+  });
 
 
 const app = express()
@@ -66,6 +68,7 @@ app.use(
 
 app.use("/api/users",userRouter)
 app.use("/api/products",productRouter)
+app.use("/api/orders", orderRouter);
 
 
 app.listen(3000 , 

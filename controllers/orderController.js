@@ -1,91 +1,171 @@
-import Order from "../models/oder.js";
+import Order from "../models/oder.js"; // keep this the same as your real file name
 import Product from "../models/Product.js";
+import { isAdmin } from "./userController.js";
 
-export function createOrder(req, res){
+export async function createOrder(req, res) {
+	// 1. CHECK: is the user logged in?
+	if (req.user == null) {
+		res.status(401).json({ message: "Unauthorized" });
+		return;
+	}
 
-    if(req.user==null){
-        req.status(401).json({
-            messege : "Unauhtorized"
-        });
-        return
-    }
+	try {
+		const cartItems = req.body.items;
 
-    try{const latestOrder = await Order.findOne().sort({date:-1})
+		if (!Array.isArray(cartItems) || cartItems.length === 0) {
+			res.status(400).json({ message: "Your order has no items" });
+			return;
+		}
 
-    let orderID = "ORD0001"
+		// 2. Make the next order ID (ORD0001, ORD0002, ...)
+		const latestOrder = await Order.findOne().sort({ date: -1 });
 
-    if(latestOrder!= null){
-        let latestOrderID = latestOrder.orderID;
+		let orderID = "ORD0001";
 
-        let latestOrderNumberString = latestOrderID.replace("ORD" , "")
+		if (latestOrder != null) {
+			const latestNumber = parseInt(latestOrder.orderID.replace("ORD", ""));
+			orderID = "ORD" + (latestNumber + 1).toString().padStart(4, "0");
+		}
 
-        let latestOrderNumber = parseInt(latestOrderNumberString)
+		// 3. BUILD: make the items from OUR database
+		// (never trust a price that comes from the browser)
+		const items = [];
+		let total = 0;
 
-        let newOrderNumber = latestOrderNumber + 1
+		for (let i = 0; i < cartItems.length; i++) {
+			const quantity = Number(cartItems[i].quantity);
 
-        let newOrderNumberString = newOrderNumber.toString().padStart(4,"0")
+			if (!Number.isInteger(quantity) || quantity < 1) {
+				res.status(400).json({
+					message: "Invalid quantity for " + cartItems[i].productID,
+				});
+				return;
+			}
 
-        orderID = "ORD" + newOrderNumberString 
+			const product = await Product.findOne({
+				productID: cartItems[i].productID,
+			});
 
-        const items =[]
-        let total =0
+			if (product == null) {
+				res.status(400).json({
+					message: `Product with ID ${cartItems[i].productID} not found`,
+				});
+				return;
+			}
 
-        for (let i=0 ; i<req.body.items.length;i++ ){
+			if (product.stock < quantity) {
+				res.status(400).json({
+					message: `Not enough stock for ${product.name}. Only ${product.stock} left`,
+				});
+				return;
+			}
 
-            const product = await Product.findOne({productID : req.body.items[i].productID})
+			items.push({
+				productID: product.productID,
+				name: product.name,
+				price: product.price,
+				quantity: quantity,
+				image: product.images?.[0],
+			});
 
-            if(product == null){
-                return res.status(400).json({
-                    messege :"Product with ID ${req.body.items[i].productID} not found"
-                })
-            }
+			total += product.price * quantity;
+		}
 
-            items.push({
-                productID : product.productID,
-                name : product.name,
-                price : product.price,
-                quantity : req.body.items[i].quantity,
-                image: product.images[0]
-            })
+		// 4. SAVE: write the order
+		const order = new Order({
+			orderID: orderID,
+			email: req.user.email,
+			name: req.body.name || req.user.firstName + " " + req.user.lastName,
+			address: req.body.address,
+			phone: req.body.phone,
+			items: items,
+			total: total,
+		});
 
-            await Product.updateOne(
-                {productID : product.productID},
-                {stock : product.stock - req.body.items[i].quantity}
-            )
-        }
-    }
-    }catch(error){
-        return res.status(500).json({
-            messege : "Error placing order",
-            error : error.messege
-        })
-    }
+		await order.save();
 
+		// 5. SUBTRACT: take the items off the shelf (only after the order is saved)
+		for (const item of items) {
+			await Product.updateOne(
+				{ productID: item.productID },
+				{ $inc: { stock: -item.quantity } }
+			);
+		}
+
+		// 6. SAY: always send an answer
+		res.json({
+			message: "Order placed successfully",
+			orderID: orderID,
+			total: total,
+		});
+	} catch (error) {
+		console.log(error);
+		res.status(500).json({
+			message: "Error placing order",
+			error: error.message,
+		});
+	}
 }
 
-export async function updateOrderStatus(req,res) {
+export async function updateOrderStatus(req, res) {
+	if (!isAdmin(req)) {
+		res.status(403).json({ message: "Only admin can update orders" });
+		return;
+	}
 
-    if(!isAdmin(req)){
-        res.status(401).json({
-            messege : "Unauthorized"
-        });
-        return
-    }
-    try{
-        const orderID = req.params.orderID
-        const status = req.body.status
+	try {
+		const orderID = req.params.orderID;
+		const status = req.body.status;
+		const notes = req.body.notes;
 
-        await Order.updateOne(
-            { orderID : orderID}
-            {status : status, notes: notes}
-        )
+		if (!status) {
+			res.status(400).json({ message: "Status is required" });
+			return;
+		}
 
-        res.json({
-            messege : "Order updated succesfully"
-        })
-    }catch {
-        res.status(500).json({
-            messege : "Error updating products"
-        })
-    }
+		const update = { status: status };
+
+		if (notes !== undefined) {
+			update.notes = notes;
+		}
+
+		const result = await Order.updateOne({ orderID: orderID }, update);
+
+		if (result.matchedCount === 0) {
+			res.status(404).json({ message: "Order not found: " + orderID });
+			return;
+		}
+
+		res.json({ message: "Order updated successfully" });
+	} catch (error) {
+		console.log(error);
+		res.status(500).json({
+			message: "Error updating order",
+			error: error.message,
+		});
+	}
+}
+
+export async function getAllOrders(req, res) {
+	// 1. CHECK: only an admin can see all orders
+	if (!isAdmin(req)) {
+		res.status(403).json({
+			message: "Only admin can view all orders",
+		});
+		return;
+	}
+
+	try {
+		// 2. GET: newest orders first
+		const orders = await Order.find().sort({ date: -1 });
+
+		// 3. SAY: send the orders back
+		res.json(orders);
+	} catch (error) {
+		console.log(error);
+		res.status(500).json({
+			message: "Error getting orders",
+			error: error.message,
+		});
+	}
 }
